@@ -1,36 +1,27 @@
-import asyncio
 import os
-import shutil
-import subprocess
-import psutil
-import requests
-import json
-
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, MessageHandler, CallbackQueryHandler, CommandHandler, ContextTypes, filters
-from jackett import search_torrents
-from torrent import qb_login, qb_list_torrents
-from utils import get_disk_space, get_ram_usage, get_cpu_usage, check_service, check_url_status, check_telegram_api
+from pathlib import Path
+from telegram.ext import ApplicationBuilder, MessageHandler, CallbackQueryHandler, CommandHandler, filters
 from handlers import handle_message, handle_category_selection, handle_status, handle_tstatus
 from dotenv import load_dotenv
 
-# === Configuration ===
-load_dotenv()
+# Always load .env sitting next to main.py (CWD-independent)
+load_dotenv(dotenv_path=Path(__file__).with_name('.env'))
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-ALLOWED_CHAT_ID = int(os.getenv("ALLOWED_CHAT_ID"))
-AUTHORIZED_USER_ID = int(os.getenv("AUTHORIZED_USER_ID"))
+AUTHORIZED_USER_ID = os.getenv("AUTHORIZED_USER_ID")
+ALLOWED_CHAT_ID = os.getenv("ALLOWED_CHAT_ID")
 
-QB_URL = "http://127.0.0.1:4545"
-QB_USER = "admin"
-QB_PASS = "adminadmin"
-CONFIG_PATH = "/home/pi-user/config.json"
+# Fail loudly if missing
+if not BOT_TOKEN:
+    raise RuntimeError("BOT_TOKEN is missing in .env")
+if not AUTHORIZED_USER_ID or not ALLOWED_CHAT_ID:
+    raise RuntimeError("AUTHORIZED_USER_ID or ALLOWED_CHAT_ID missing in .env")
 
-session = requests.Session()
+# Cast after presence check
+AUTHORIZED_USER_ID = int(AUTHORIZED_USER_ID)
+ALLOWED_CHAT_ID = int(ALLOWED_CHAT_ID)
 
-
-# === Bot Startup ===
-if __name__ == '__main__':
+if __name__ == "__main__":
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("status", handle_status))
     app.add_handler(CommandHandler("tstatus", handle_tstatus))

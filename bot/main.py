@@ -12,11 +12,14 @@ from jackett import search_torrents
 from torrent import qb_login, qb_list_torrents
 from utils import get_disk_space, get_ram_usage, get_cpu_usage, check_service, check_url_status, check_telegram_api
 from handlers import handle_message, handle_category_selection, handle_status, handle_tstatus
+from dotenv import load_dotenv
 
 # === Configuration ===
-BOT_TOKEN = "8214598860:AAGfd1_8or7peXppHgkyekOV4oArXc_1Ezo"
-AUTHORIZED_USER_ID = 93992596
-ALLOWED_CHAT_ID = -4979329913
+load_dotenv()
+
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+ALLOWED_CHAT_ID = int(os.getenv("ALLOWED_CHAT_ID"))
+AUTHORIZED_USER_ID = int(os.getenv("AUTHORIZED_USER_ID"))
 
 QB_URL = "http://127.0.0.1:4545"
 QB_USER = "admin"

@@ -17,8 +17,15 @@ def get_cpu_usage():
     return f"{psutil.cpu_percent()}% (Load: {load1:.2f}, {load5:.2f})"
 
 def check_service(name: str) -> str:
+    """
+    Returns '✅ Running' if systemd service is active, else '❌ Stopped'.
+    Matches your existing emoji style so handlers.py can drop it in directly.
+    """
     try:
-        status = subprocess.check_output(["systemctl", "is-active", name], stderr=subprocess.DEVNULL).decode().strip()
+        status = subprocess.check_output(
+            ["systemctl", "is-active", name],
+            stderr=subprocess.DEVNULL
+        ).decode().strip()
         return "✅ Running" if status == "active" else "❌ Stopped"
     except Exception:
         return "❌ Unknown"

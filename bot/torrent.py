@@ -1,5 +1,5 @@
-import requests
 import os
+import requests
 
 QB_URL  = os.getenv("QB_URL", "http://127.0.0.1:4545").rstrip("/")
 QB_USER = os.getenv("QB_USER", "")
@@ -64,3 +64,36 @@ def qb_health() -> bool:
         return r.ok
     except Exception:
         return False
+
+# --- NEW: pending/not-started helper ---
+PENDING_STATES = {
+    "metaDL",
+    "forcedMetaDL",
+    "queuedDL",
+    "stalledDL",
+    "checkingDL",
+    "allocating",
+}
+
+def qb_list_pending_torrents(limit: int | None = 10, count_only: bool = False):
+    """
+    Returns a list of torrents that haven't really started downloading yet:
+      - state in PENDING_STATES (metadata/queued/stalled/etc.)
+      - OR progress == 0.0
+    If count_only=True, returns total count (int) instead of a list.
+    """
+    try:
+        all_ts = qb_list_torrents()
+    except Exception:
+        return 0 if count_only else []
+    pending = [
+        t for t in all_ts
+        if (t.get("state") in PENDING_STATES) or (float(t.get("progress", 0)) == 0.0)
+    ]
+    # stable sort by added_on then name
+    pending.sort(key=lambda t: (t.get("added_on", 0) or 0, t.get("name", "") or ""))
+    if count_only:
+        return len(pending)
+    if limit is None:
+        return pending
+    return pending[:limit]

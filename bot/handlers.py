@@ -9,7 +9,7 @@ from utils import (
     check_service, check_url_status, check_telegram_api
 )
 from jackett import search_torrents
-from torrent import qb_list_torrents, add_torrent
+from torrent import qb_list_torrents, add_torrent, qb_list_pending_torrents
 
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger(__name__)
@@ -18,17 +18,19 @@ log = logging.getLogger(__name__)
 AUTHORIZED_USER_ID = int(os.getenv("AUTHORIZED_USER_ID", "0"))
 ALLOWED_CHAT_ID    = int(os.getenv("ALLOWED_CHAT_ID", "0"))
 BOT_TOKEN          = os.getenv("BOT_TOKEN", "")
+PLEX_SERVICE_NAME  = os.getenv("PLEX_SERVICE_NAME", "plexmediaserver")
 
 # --- lazy fixup if main.py loaded .env after import ---
 def _ensure_env_loaded():
-    global AUTHORIZED_USER_ID, ALLOWED_CHAT_ID, BOT_TOKEN
+    global AUTHORIZED_USER_ID, ALLOWED_CHAT_ID, BOT_TOKEN, PLEX_SERVICE_NAME
     if AUTHORIZED_USER_ID == 0 or ALLOWED_CHAT_ID == 0 or not BOT_TOKEN:
-        # Try to re-read (main.py should have called load_dotenv already)
         AUTHORIZED_USER_ID = int(os.getenv("AUTHORIZED_USER_ID", "0"))
         ALLOWED_CHAT_ID    = int(os.getenv("ALLOWED_CHAT_ID", "0"))
         BOT_TOKEN          = os.getenv("BOT_TOKEN", "")
+        PLEX_SERVICE_NAME  = os.getenv("PLEX_SERVICE_NAME", "plexmediaserver")
         log.info(f"[ENV REFRESH] AUTHORIZED_USER_ID={AUTHORIZED_USER_ID}, "
-                 f"ALLOWED_CHAT_ID={ALLOWED_CHAT_ID}, BOT_TOKEN={'set' if BOT_TOKEN else 'missing'}")
+                 f"ALLOWED_CHAT_ID={ALLOWED_CHAT_ID}, BOT_TOKEN={'set' if BOT_TOKEN else 'missing'}, "
+                 f"PLEX_SERVICE_NAME={PLEX_SERVICE_NAME}")
 
 def _allowed(chat_type: str, chat_id: int, user_id: int) -> bool:
     """Gate all handlers; log why we block."""
@@ -73,6 +75,7 @@ async def send_search_page(msg, context):
         )
         await asyncio.sleep(delay)
 
+    # navigation with page/total info
     kb = []
     if page > 0:
         kb.append(InlineKeyboardButton("⬆️ Prev", callback_data="page_prev"))
@@ -157,23 +160,31 @@ async def handle_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not _allowed(chat.type, chat.id, uid):
         return
 
-    # qB stats
+    # qB stats (simple counters)
     qbt_status = "✅ Connected"
     downloading = paused = completed = 0
     torrents = qb_list_torrents()
     for t in torrents:
-        if t.get('state') == 'downloading':
+        state = t.get('state')
+        if state == 'downloading':
             downloading += 1
-        if t.get('state') == 'pausedUP':
+        if state == 'pausedUP':
             paused += 1
         if t.get('progress', 0) == 1.0:
             completed += 1
+
+    # NEW: pending / not-started count only
+    pending_total = qb_list_pending_torrents(limit=None, count_only=True)
+    if pending_total is None:
+        pending_total = 0
+    pending_block = f"⏳ Pending / Not started: {pending_total}\n\n"
 
     # services
     jackett_webui = check_url_status("http://127.0.0.1:9117")
     jackett_service = check_service("jackett")
     tg_api = check_telegram_api(BOT_TOKEN)
     tg_service = check_service("telegrambot")
+    plex_service = check_service(PLEX_SERVICE_NAME)
 
     # system
     disk = get_disk_space()
@@ -185,12 +196,15 @@ async def handle_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "```\n"
         "=== qBittorrent ===\n"
         f"🔌 {qbt_status}\n"
-        f"⬇️  Downloading: {downloading}\n"
-        f"⏸️  Paused:      {paused}\n"
-        f"✅ Completed:   {completed}\n\n"
+        f"⬇️ Downloading: {downloading}\n"
+        f"⏸️ Paused:      {paused}\n"
+        f"✅ Completed:   {completed}\n"
+        f"{pending_block}"
         "=== Jackett ===\n"
         f"🌐 WebUI:   {jackett_webui}\n"
         f"🧲 Service: {jackett_service}\n\n"
+        "=== Plex ===\n"
+        f"🎞️ Service: {plex_service}\n\n"
         "=== Telegram Bot ===\n"
         f"📡 API:     {tg_api}\n"
         f"🛎️ Service: {tg_service}\n\n"

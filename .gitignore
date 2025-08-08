@@ -1,0 +1,12 @@
+# Ignore virtual environment
+mybotenv/
+venv/
+
+# Ignore Python cache
+__pycache__/
+
+# Ignore config with credentials
+config.json
+
+# Ignore system files
+*.log

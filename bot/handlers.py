@@ -4,12 +4,12 @@ import asyncio
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from utils import (
+from bot.utils import (
     get_disk_space, get_ram_usage, get_cpu_usage,
     check_service, check_url_status, check_telegram_api
 )
-from jackett import search_torrents
-from torrent import qb_list_torrents, add_torrent, qb_list_pending_torrents
+from bot.jackett import search_torrents
+from bot.torrent import qb_list_torrents, add_torrent, qb_list_pending_torrents
 
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger(__name__)

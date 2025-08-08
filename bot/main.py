@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from telegram.ext import ApplicationBuilder, MessageHandler, CallbackQueryHandler, CommandHandler, filters
-from handlers import handle_message, handle_category_selection, handle_status, handle_tstatus
+from bot.handlers import handle_message, handle_category_selection, handle_status, handle_tstatus
 from dotenv import load_dotenv
 
 # Always load .env sitting next to main.py (CWD-independent)

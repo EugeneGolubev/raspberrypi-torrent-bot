@@ -11,7 +11,7 @@ def write_script(name, content):
     return str(path)
 
 def test_notify_complete_sh(monkeypatch):
-    env_path = Path(tempfile.gettempdir()) / ".env"
+    env_path = Path(tempfile.gettempdir()) / "test_env_notify.env"
     env_path.write_text("BOT_TOKEN=dummy\nALLOWED_CHAT_ID=123456", encoding="utf-8")
 
     script = write_script("notify_complete.sh", """#!/bin/bash
@@ -23,7 +23,9 @@ exit 0
 """)
     result = subprocess.run([script], capture_output=True, text=True)
     assert "Would notify 123456 with TestTorrent" in result.stdout
+
     os.remove(script)
+    env_path.unlink(missing_ok=True)
 
 def test_delete_completed_sh_logic(monkeypatch):
     script = write_script("delete_completed.sh", """#!/bin/bash

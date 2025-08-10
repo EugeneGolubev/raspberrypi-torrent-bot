@@ -34,7 +34,7 @@ async def test_handle_message_search(monkeypatch):
     mock_context = MagicMock()
     mock_context.user_data = {}
 
-    monkeypatch.setattr("handlers._allowed", lambda *a: True)
+    monkeypatch.setattr("bot.handlers._allowed", lambda *a: True)
     monkeypatch.setattr("bot.handlers.search_torrents", lambda q: [
         {
             "title": f"Torrent {i}",
@@ -44,14 +44,14 @@ async def test_handle_message_search(monkeypatch):
             "magnet": "magnet:?xt=urn"
         } for i in range(3)
     ])
-    monkeypatch.setattr("handlers.search_torrents", lambda q: [{
+    monkeypatch.setattr("bot.handlers.search_torrents", lambda q: [{
         "title": "Test",
         "size": 123,
         "seeders": 50,
         "tracker": "X",
         "magnet": "magnet:?xt=urn"
     }] * 3)
-    monkeypatch.setattr("handlers.send_search_page", AsyncMock())
+    monkeypatch.setattr("bot.handlers.send_search_page", AsyncMock())
 
     await handle_message(mock_update, mock_context)
     assert mock_context.user_data["search_page"] == 0
@@ -67,15 +67,15 @@ async def test_handle_status(monkeypatch):
 
     context = MagicMock()
 
-    monkeypatch.setattr("handlers._allowed", lambda *a: True)
-    monkeypatch.setattr("handlers.qb_list_torrents", lambda: [{"state": "downloading", "progress": 0.5}])
-    monkeypatch.setattr("handlers.qb_list_pending_torrents", lambda limit=None, count_only=True: 1)
-    monkeypatch.setattr("handlers.check_url_status", lambda u: "✅ Online")
-    monkeypatch.setattr("handlers.check_service", lambda s: "✅ Running")
-    monkeypatch.setattr("handlers.check_telegram_api", lambda token: "✅ Online")
-    monkeypatch.setattr("handlers.get_disk_space", lambda: "42 GB free")
-    monkeypatch.setattr("handlers.get_ram_usage", lambda: "1024 MB / 4096 MB")
-    monkeypatch.setattr("handlers.get_cpu_usage", lambda: "20.0% (Load: 0.5, 0.2)")
+    monkeypatch.setattr("bot.handlers._allowed", lambda *a: True)
+    monkeypatch.setattr("bot.handlers.qb_list_torrents", lambda: [{"state": "downloading", "progress": 0.5}])
+    monkeypatch.setattr("bot.handlers.qb_list_pending_torrents", lambda limit=None, count_only=True: 1)
+    monkeypatch.setattr("bot.handlers.check_url_status", lambda u: "✅ Online")
+    monkeypatch.setattr("bot.handlers.check_service", lambda s: "✅ Running")
+    monkeypatch.setattr("bot.handlers.check_telegram_api", lambda token: "✅ Online")
+    monkeypatch.setattr("bot.handlers.get_disk_space", lambda: "42 GB free")
+    monkeypatch.setattr("bot.handlers.get_ram_usage", lambda: "1024 MB / 4096 MB")
+    monkeypatch.setattr("bot.handlers.get_cpu_usage", lambda: "20.0% (Load: 0.5, 0.2)")
 
     await handle_status(update, context)
     update.message.reply_text.assert_awaited()

@@ -1,6 +1,8 @@
 import os
+import logging
 from pathlib import Path
-from telegram.ext import ApplicationBuilder, MessageHandler, CallbackQueryHandler, CommandHandler, filters
+from telegram.constants import ParseMode
+from telegram.ext import ApplicationBuilder, MessageHandler, CallbackQueryHandler, CommandHandler, filters, Defaults
 from bot.handlers import handle_message, handle_category_selection, handle_status, handle_tstatus
 from dotenv import load_dotenv
 
@@ -22,7 +24,13 @@ AUTHORIZED_USER_ID = int(AUTHORIZED_USER_ID)
 ALLOWED_CHAT_ID = int(ALLOWED_CHAT_ID)
 
 if __name__ == "__main__":
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    logging.basicConfig(level=logging.INFO)
+    app = (
+        ApplicationBuilder()
+        .token(BOT_TOKEN)
+        .defaults(Defaults(parse_mode=ParseMode.MARKDOWN))
+        .build()
+    )
     app.add_handler(CommandHandler("status", handle_status))
     app.add_handler(CommandHandler("tstatus", handle_tstatus))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))

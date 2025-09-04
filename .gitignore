@@ -11,3 +11,9 @@ config.json
 # Ignore system files
 *.log
 .env
+htmlcov/
+.coverage
+.pytest_cache/
+scripts/post_download.log
+scripts/cookies.txt
+test_output.log

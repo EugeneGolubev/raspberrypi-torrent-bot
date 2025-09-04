@@ -21,23 +21,37 @@ else
     exit 1
 fi
 
-# Now we can safely use env vars (QB_URL, QB_USER, QB_PASS)
 HOST="$QB_URL"
 USERNAME="$QB_USER"
 PASSWORD="$QB_PASS"
-COOKIE_FILE="$SCRIPT_DIR/cookies.txt"
+
+# Tools checks
+if ! command -v jq >/dev/null 2>&1; then
+  echo "jq is required but not installed" >&2
+  exit 1
+fi
+
+# Temp cookie file with cleanup
+COOKIE_FILE="$(mktemp -t qbcookies.XXXXXX)"
+trap 'rm -f "$COOKIE_FILE"' EXIT
 
 # Authenticate
-curl -s -c "$COOKIE_FILE" -d "username=$USERNAME&password=$PASSWORD" "$HOST/api/v2/auth/login"
+curl -fsS -c "$COOKIE_FILE" -d "username=$USERNAME&password=$PASSWORD" "$HOST/api/v2/auth/login" >/dev/null
 
 # Get completed torrents and delete them (but keep files)
-curl -s -b "$COOKIE_FILE" "$HOST/api/v2/torrents/info" |
-jq -r '.[] | select(.progress == 1.0) | .hash' |
+completed_hashes=$(curl -fsS -b "$COOKIE_FILE" "$HOST/api/v2/torrents/info" | jq -r '.[] | select(.progress == 1.0) | .hash')
+
+if [[ -z "$completed_hashes" ]]; then
+  echo "No completed torrents found."
+  exit 0
+fi
+
 while read -r hash; do
-    echo "😏 Torrent completed: $hash — giving it 15 seconds before deletion..."
-    sleep 15
-    echo "🔥 Deleting: $hash"
-    curl -s -X POST -b "$COOKIE_FILE" \
-         -d "hashes=$hash&deleteFiles=false" \
-         "$HOST/api/v2/torrents/delete"
-done
+  [[ -z "$hash" ]] && continue
+  echo "😏 Torrent completed: $hash — giving it 15 seconds before deletion..."
+  sleep "${QBT_DELETE_DELAY:-15}"
+  echo "🔥 Deleting: $hash"
+  curl -fsS -X POST -b "$COOKIE_FILE" \
+    -d "hashes=$hash&deleteFiles=false" \
+    "$HOST/api/v2/torrents/delete" >/dev/null
+done <<<"$completed_hashes"

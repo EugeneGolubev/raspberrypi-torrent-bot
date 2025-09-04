@@ -4,55 +4,38 @@ import asyncio
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
+from telegram.helpers import escape_markdown
 from bot.utils import (
     get_disk_space, get_ram_usage, get_cpu_usage,
     check_service, check_url_status, check_telegram_api
 )
 from bot.jackett import search_torrents
 from bot.torrent import qb_list_torrents, add_torrent, qb_list_pending_torrents
+from bot.config import get_settings
 
-logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger(__name__)
-
-# --- env loading (import-time) ---
-AUTHORIZED_USER_ID = int(os.getenv("AUTHORIZED_USER_ID", "0"))
-ALLOWED_CHAT_ID    = int(os.getenv("ALLOWED_CHAT_ID", "0"))
-BOT_TOKEN          = os.getenv("BOT_TOKEN", "")
-PLEX_SERVICE_NAME  = os.getenv("PLEX_SERVICE_NAME", "plexmediaserver")
-
-# --- lazy fixup if main.py loaded .env after import ---
-def _ensure_env_loaded():
-    global AUTHORIZED_USER_ID, ALLOWED_CHAT_ID, BOT_TOKEN, PLEX_SERVICE_NAME
-    if AUTHORIZED_USER_ID == 0 or ALLOWED_CHAT_ID == 0 or not BOT_TOKEN:
-        AUTHORIZED_USER_ID = int(os.getenv("AUTHORIZED_USER_ID", "0"))
-        ALLOWED_CHAT_ID    = int(os.getenv("ALLOWED_CHAT_ID", "0"))
-        BOT_TOKEN          = os.getenv("BOT_TOKEN", "")
-        PLEX_SERVICE_NAME  = os.getenv("PLEX_SERVICE_NAME", "plexmediaserver")
-        log.info(f"[ENV REFRESH] AUTHORIZED_USER_ID={AUTHORIZED_USER_ID}, "
-                 f"ALLOWED_CHAT_ID={ALLOWED_CHAT_ID}, BOT_TOKEN={'set' if BOT_TOKEN else 'missing'}, "
-                 f"PLEX_SERVICE_NAME={PLEX_SERVICE_NAME}")
 
 def _allowed(chat_type: str, chat_id: int, user_id: int) -> bool:
     """Gate all handlers; log why we block."""
-    _ensure_env_loaded()
+    s = get_settings()
     ok = True
     if chat_type == "private":
-        ok = (user_id == AUTHORIZED_USER_ID)
+        ok = (user_id == s.authorized_user_id)
     elif chat_type in ("group", "supergroup"):
-        ok = (chat_id == ALLOWED_CHAT_ID)
+        ok = (chat_id == s.allowed_chat_id)
     else:
         ok = False
     if not ok:
         log.debug(f"[BLOCKED] chat_type={chat_type} chat_id={chat_id} user_id={user_id} "
-                  f"env(AUTH_USER={AUTHORIZED_USER_ID}, ALLOWED_CHAT={ALLOWED_CHAT_ID})")
+                  f"env(AUTH_USER={s.authorized_user_id}, ALLOWED_CHAT={s.allowed_chat_id})")
     return ok
 
-pending_links: dict[int, str] = {}
+# Store pending magnet per-user via PTB user_data
 
 async def send_search_page(msg, context):
     page = context.user_data.get("search_page", 0)
     results = context.user_data.get("search_results", [])
-    per = 10
+    per = 5
     total = len(results)
     pages = (total + per - 1) // per
     start = page * per
@@ -62,13 +45,14 @@ async def send_search_page(msg, context):
     log.debug(f"[SEARCH PAGE] page={page+1}/{pages} chat_type={chat_type} delay={delay}s total={total}")
 
     for i, t in enumerate(subset, start=start):
+        title = escape_markdown(str(t.get('title', '')), version=1)
+        tracker = escape_markdown(str(t.get('tracker', '')), version=1)
         text = (
-            f"🎬 *{i+1}. {t['title']}*\n"
-            f"📦 {t['size']} MB | 👥 {t['seeders']} | 🌍 `{t['tracker']}`"
+            f"🎬 *{i+1}. {title}*\n"
+            f"📦 {t['size']} MB | 👥 {t['seeders']} | 🌍 `{tracker}`"
         )
         await msg.message.reply_text(
             text,
-            parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("🔗 Get Magnet", callback_data=f"magnet_{i}")]]
             )
@@ -133,7 +117,7 @@ async def handle_category_selection(update: Update, context: ContextTypes.DEFAUL
         index = int(data.split("_")[1])
         results = context.user_data.get("search_results", [])
         if 0 <= index < len(results):
-            pending_links[uid] = results[index]["magnet"]
+            context.user_data['pending_magnet'] = results[index]["magnet"]
             kb = [[InlineKeyboardButton(c, callback_data=c)] for c in ("Movie", "TV", "Others")]
             await q.edit_message_text("Select category:", reply_markup=InlineKeyboardMarkup(kb))
         else:
@@ -141,7 +125,7 @@ async def handle_category_selection(update: Update, context: ContextTypes.DEFAUL
         return
 
     # Add torrent
-    magnet = pending_links.get(uid)
+    magnet = context.user_data.get('pending_magnet')
     if not magnet:
         await q.edit_message_text("No magnet link.")
         return
@@ -150,8 +134,8 @@ async def handle_category_selection(update: Update, context: ContextTypes.DEFAUL
         await q.edit_message_text("❌ qBittorrent login failed.")
         return
 
-    await q.edit_message_text(f"✅ Added as *{data}*", parse_mode="Markdown")
-    pending_links.pop(uid, None)
+    await q.edit_message_text(f"✅ Added as *{data}*")
+    context.user_data.pop('pending_magnet', None)
     context.user_data.pop('pending', None)
 
 async def handle_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -182,9 +166,10 @@ async def handle_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # services
     jackett_webui = check_url_status("http://127.0.0.1:9117")
     jackett_service = check_service("jackett")
-    tg_api = check_telegram_api(BOT_TOKEN)
+    s = get_settings()
+    tg_api = check_telegram_api(s.bot_token)
     tg_service = check_service("telegrambot")
-    plex_service = check_service(PLEX_SERVICE_NAME)
+    plex_service = check_service(s.plex_service_name)
 
     # system
     disk = get_disk_space()
@@ -214,7 +199,7 @@ async def handle_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"⚙️ CPU:      {cpu}\n"
         "```"
     )
-    await update.message.reply_text(text, parse_mode="Markdown")
+    await update.message.reply_text(text)
 
 async def handle_tstatus(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
@@ -233,4 +218,4 @@ async def handle_tstatus(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state = t.get('state')
         msg += f"{name:30} | {state}\n"
     msg += "```"
-    await update.message.reply_text(msg, parse_mode="Markdown")
+    await update.message.reply_text(msg)

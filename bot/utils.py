@@ -13,8 +13,12 @@ def get_ram_usage():
     return f"{mem.used // (1024 ** 2)} MB / {mem.total // (1024 ** 2)} MB"
 
 def get_cpu_usage():
-    load1, load5, _ = os.getloadavg()
-    return f"{psutil.cpu_percent()}% (Load: {load1:.2f}, {load5:.2f})"
+    try:
+        load1, load5, _ = os.getloadavg()
+        load_txt = f"(Load: {load1:.2f}, {load5:.2f})"
+    except Exception:
+        load_txt = ""
+    return f"{psutil.cpu_percent()}% {load_txt}".strip()
 
 def check_service(name: str) -> str:
     """
@@ -24,7 +28,8 @@ def check_service(name: str) -> str:
     try:
         status = subprocess.check_output(
             ["systemctl", "is-active", name],
-            stderr=subprocess.DEVNULL
+            stderr=subprocess.DEVNULL,
+            timeout=3,
         ).decode().strip()
         return "✅ Running" if status == "active" else "❌ Stopped"
     except Exception:

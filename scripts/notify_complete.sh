@@ -36,7 +36,7 @@ fi
 MESSAGE="🔥 Torrent completed: ${TORRENT_NAME}"
 
 # Use url-encoding for safety
-curl -sS -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+curl -fsS -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
   -d "chat_id=${CHAT_ID}" \
   --data-urlencode "text=${MESSAGE}" >/dev/null
 
